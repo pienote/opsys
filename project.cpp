@@ -152,7 +152,8 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 		if(cpu_burst_proc == NULL)
 		{
 				
-		}		
+		}
+		timer++;
 	}
 
 	// file write here
