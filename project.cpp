@@ -149,9 +149,18 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 	while(finished < n_procs)
 	{
 		// logic here
-		if(cpu_burst_proc == NULL)
+		switch(at_type)
 		{
-				
+			case FCFS:
+				break;
+			case SJF:
+				break;
+			case SRT:
+				break;
+			case RR:
+				break;
+			default:
+				break;	
 		}
 		timer++;
 	}
