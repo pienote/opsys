@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -93,7 +94,8 @@ void printq(std::vector<process*> q)
 
 void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double alpha, int t_slice, alg_type at, FILE* out, std::string rr_add="END")
 {
-	std::vector<process*> procs;
+	std::map<char, process*> proc_map; // letter->process with letter
+	std::vector<process*> procs; // all the processes
 	srand48(seed);
 	for(char c='A'; c < ((char) 'A'+n_procs); c++)
 	{	
@@ -118,34 +120,39 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 
 		// for(int i = 0; i < proc->cpu_bursts.size(); i++)
 		//	std::cout << proc->cpu_bursts[i] << " ";		
-		std::cout << std::endl;
-		for(int i = 0; i < proc->io_bursts.size(); i++)
-			std::cout << proc->io_bursts[i] << " ";		
+		//std::cout << std::endl;
+		//for(int i = 0; i < proc->io_bursts.size(); i++)
+		//	std::cout << proc->io_bursts[i] << " ";		
 
 		std::cout << "Process " << proc->id << " [NEW] (arrival time " << proc->arr_time << " ms) " << proc->n_bursts << " CPU bursts\n";
+		proc_map.insert(std::pair<char, process*>(c, proc));
 		procs.push_back(proc);	
 		// finish setting up the processes
 	}
 
 	std::sort(procs.begin(), procs.end());	
 
-	// do other stuff here
-	process* cpu_burst_proc; // in current use
-	process* io_burst_proc;
+	// probably need more variables here
+	process* cpu_burst_proc = NULL; // in current use
+	process* io_burst_proc = NULL;
 
-	std::vector<process*> ready_queue;
+	std::vector<process*> ready_queue; // the ready queue
 	int num_con_switches = 0;
 	int num_preempts = 0;
 	bool done = false;
 	int timer = 0;
+	int finished = 0; // number of procs finished
 
 	// more stuff here
 	std::cout << "time " << timer << "ms: Simulator started for " + at + " ";
 	printq(ready_queue);	
-	while(!done)
+	while(finished < n_procs)
 	{
 		// logic here
-			
+		if(cpu_burst_proc == NULL)
+		{
+				
+		}		
 	}
 
 	// file write here
