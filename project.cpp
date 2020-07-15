@@ -149,7 +149,7 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 	while(finished < n_procs)
 	{
 		// logic here
-		switch(at_type)
+		switch(at)
 		{
 			case FCFS:
 				break;
