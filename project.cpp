@@ -61,6 +61,13 @@ struct process {
 	}
 };
 
+struct CPU {
+	process * curr_proc = NULL; //current process CPU is being occupied by
+	int rem_burst_time = 0;			//If process is being run, how much longer until command switch completes
+	int switch_in_time = 0;			//If process is switching into the CPU, how much longer until CPU burst can be excuted
+	int switch_out_time = 0;		//If process is switching out of the CPU, how much longer until another process can switch in
+};
+
 double exp_random(double lambda, int upper)
 {
 	double x;
@@ -145,18 +152,131 @@ std::vector<int> SRT(std::map<char, process*> proc_map, std::vector<process*> pr
 
 //Runs the RR CPU scheduling algorithm and returns a list containing
 //[average wait time time, average turnaround time, # of context switches, # of preemptions]
-std::vector<int> RR(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs)
+std::vector<int> RR(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs, int t_slice, std::string rr_add)
 {
 	for(int i = 0; i < procs.size(); i++)
 	{
 		std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts\n";
 	}
 	std::cout << "time 0ms: Simulator started for RR [Q <empty>]\n";
-	/*
-		do shit
-	*/
-	std::vector<int> temp = {0, 0, 0, 0};
-	return temp;
+	std::vector<int> data = {0, 0, 0, 0};
+	int time = 0;
+	int procs_completed = 0;
+	std::vector<process*> readyQ;
+	CPU* cpu = new CPU();
+	while(procs_completed < procs.size() and time < 9999)
+	{
+		//Decrement rem_burst_time/switch_in_time/switch_out_time
+		if(cpu->curr_proc != NULL)
+		{
+			//If CPU burst is running
+			if(cpu->rem_burst_time != 0)
+			{
+				cpu->rem_burst_time -= 1;
+				//Check if process finished burst
+				if(cpu->rem_burst_time == 0)
+				{
+					bool terminated = false;
+					cpu->curr_proc->rem_bursts -= 1;
+					//Check if process terminated
+					if(cpu->curr_proc->rem_bursts == 0)
+					{
+						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " terminated ";
+						printq(readyQ);
+						terminated = true;
+					}
+					else
+					{
+						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " completed a CPU burst; " << cpu->curr_proc->rem_bursts << " to go ";
+						printq(readyQ);
+
+					}
+
+					//If process was not terminate, calculate time until I/O burst completion
+					if(!terminated)
+					{
+						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " switching out of CPU; will block on I/O until time "
+						<< time + t_cs/2 + cpu->curr_proc->io_bursts[cpu->curr_proc->io_index] << "ms ";
+						printq(readyQ);
+						//Process starts I/O burst and CPU is locked for t_cs/2
+
+
+
+						//**************I/O***********************
+
+
+						cpu->curr_proc->io_index++;
+					}
+					cpu->curr_proc = NULL;
+					cpu->rem_burst_time = 0;
+					cpu->switch_in_time = 0;
+					cpu->switch_out_time = t_cs/2;
+				}
+			}
+			//If a process is currently being switched in to the CPU
+			else if(cpu->switch_in_time != 0)
+			{
+				cpu->switch_in_time -= 1;
+				//New process begins CPU burst
+				if(cpu->switch_in_time == 0)
+				{
+					std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " started using the CPU for "
+					<< cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] << "ms burst ";
+					printq(readyQ);
+					cpu->rem_burst_time = cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index];
+					cpu->curr_proc->cpu_index++;
+				}
+			}
+			//If a process is currently being switched out of the CPU
+			else if(cpu->switch_out_time != 0)
+			{
+				cpu->switch_out_time -= 1;
+				if(cpu->switch_out_time == 0)
+				{
+					cpu->curr_proc = NULL;
+				}
+			}
+			else
+			{
+				std::cerr << "ERROR: CPU occupied by dead process\n";
+				return data;
+			}
+		}
+
+		//Check if a process arrives
+		for(int i = 0; i < procs.size(); i++)
+		{
+			if(procs[i]->arr_time == time)
+			{
+				//add process to the readyQ
+				if(!rr_add.compare("BEGINNING"))
+				{
+					readyQ.insert(readyQ.begin(), procs[i]);
+				}
+				else
+				{
+					readyQ.push_back(procs[i]);
+				}
+				//print out readyQ
+				std::cout << "time " << time << "ms : Process " << procs[i]->id  << " arrived; added to ready queue ";
+				printq(readyQ);
+			}
+		}
+		//Check if a process starts using the CPU
+		if(cpu->curr_proc == NULL && readyQ.size() > 0)
+		{
+			cpu->curr_proc = readyQ[0];
+			readyQ.erase(readyQ.begin());
+			cpu->switch_in_time = t_cs/2;
+		}
+		//Check for process preemption
+
+		//Check if a process finishes performing I/O
+
+		time++;
+	}
+	std::cout << "time " << time << "ms : Simulator ended for RR [Q <empty>]\n";
+	return data;
 }
 
 //Prints stats to the required output file
@@ -167,7 +287,7 @@ void print_stats(std::string alg, std::vector<int> data, FILE* out)
 	*/
 }
 
-void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double alpha, int t_slice, FILE* out, std::string rr_add="END")
+void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double alpha, int t_slice, FILE* out, std::string rr_add)
 {
 	std::map<char, process*> proc_map; // letter->process with letter
 	std::vector<process*> procs; // all the processes
@@ -204,14 +324,15 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 	std::sort(procs.begin(), procs.end());	
 
 	std::vector<int> data;
-	
+	/*
 	data = FCFS(proc_map, procs, t_cs);
 	print_stats("FCFS", data, out);
 	data = SJF(proc_map, procs, t_cs);
 	print_stats("SJF", data, out);
 	data = SRT(proc_map, procs, t_cs);
 	print_stats("SRT", data, out);
-	data = RR(proc_map, procs, t_cs);
+	*/
+	data = RR(proc_map, procs, t_cs, t_slice, rr_add);
 	print_stats("RR", data, out);
 }	
 
@@ -231,15 +352,14 @@ int main(int argc, char* argv[])
 	double lambda = atof(argv[3]);
 	int upper = atoi(argv[4]);
 	unsigned int t_cs = atoi(argv[5]);
-	double alpha = atof(argv[6]);
+	int alpha = atoi(argv[6]);
 	int t_slice = atoi(argv[7]);
-	std::string rr_add;
+	out = fopen("simout.txt", "w");
+	std::string rr_add = "END";
 	if(argc == 9 && strcmp(argv[8], "BEGINNING") == 0)
-		rr_add = "BEGINNING";
+		rr_add = "BEGINNING";	
+	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, out, rr_add);
 
-	out = fopen("simout.txt", "w");	
-
-	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, out);	
 
 	return EXIT_SUCCESS;
 }
