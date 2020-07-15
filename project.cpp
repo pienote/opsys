@@ -42,7 +42,7 @@ struct process {
 	int rem_bursts;	// remaining
 	
 	int tau;
-	int turnaround;
+	int turnaround_time;
 
 	int cpu_index;	// which cpu burst it is on
 	int io_index;
@@ -101,6 +101,11 @@ void printq(std::vector<process*> q)
 	std::cout << "]\n";
 }
 
+//void sjf_algorithm(std::vector<process*> procs, std::vector<process*> rdy_q, int t_cs, int time)
+//{
+
+//}
+
 void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double alpha, int t_slice, alg_type at, FILE* out, std::string rr_add="END")
 {
 	std::map<char, process*> proc_map; // letter->process with letter
@@ -116,17 +121,20 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 		proc->wait_time = 0;	
 		proc->n_bursts = trunc(drand48()*100) + 1;	
 		proc->rem_bursts = proc->n_bursts;
-		proc->turnaround = 0;		
+		proc->turnaround_time = 0;		
+		proc->cpu_index = 0;
+	    proc->io_index = 0;	
+		proc->turnaround_time = 0;
 
 		proc->cpu_bursts = std::vector<int>(proc->n_bursts, 0);
 		proc->io_bursts = std::vector<int>(proc->n_bursts-1, 0);
 
+		double sum = 0;
 		for(int i = 0; i < proc->n_bursts; i++)
 		{
 			proc->cpu_bursts[i] = ceil(exp_random(lambda, upper));
 			if(i != proc->n_bursts-1) proc->io_bursts[i] = ceil(exp_random(lambda, upper));
 		}
-
 		// for(int i = 0; i < proc->cpu_bursts.size(); i++)
 		//	std::cout << proc->cpu_bursts[i] << " ";		
 		//std::cout << std::endl;
@@ -141,6 +149,7 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 
 	std::sort(procs.begin(), procs.end());	
 
+	process* p1 = procs.front(); 
 	// probably need more variables here
 	process* cpu_burst_proc = NULL; // in current use
 	process* io_burst_proc = NULL;
@@ -151,7 +160,6 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 	bool done = false;
 	int timer = 0;
 	int finished = 0; // number of procs finished
-
 	// more stuff here
 	
 	std::cout << "time " << timer << "ms: Simulator started for ";
@@ -170,17 +178,19 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 			std::cout << "RR ";
 			break;
 		default:
-			break;	
+		 	break;	
 	}
 	printq(ready_queue);	
+	// logic here
 	while(finished < n_procs)
 	{
-		// logic here
 		switch(at)
 		{
 			case FCFS:
 				break;
 			case SJF:
+				
+				
 				break;
 			case SRT:
 				break;
@@ -191,7 +201,6 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 		}
 		timer++;
 	}
-
 	// file write here
 
 }	
@@ -220,12 +229,12 @@ int main(int argc, char* argv[])
 
 	out = fopen("simout.txt", "w");	
 	// RUN FCFS
-	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, FCFS, out);	
+//	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, FCFS, out);	
 	// RUN SJF
 	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, SJF, out);	
 	// RUN SRT
-	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, SRT, out);	
+//	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, SRT, out);	
 	// RUN RR
-	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, RR, out, rr_add);	
+//	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, RR, out, rr_add);	
 	return EXIT_SUCCESS;
 }
