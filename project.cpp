@@ -20,12 +20,13 @@ Test 5     ./a.out 8 64 0.001 4096 4 0.5 2048
 #include <string>
 #include <vector>
 
-typedef const std::string& alg_type;
-
-alg_type FCFS = "FCFS";
-alg_type SJF = "SJF";
-alg_type SRT = "SRT";
-alg_type RR = "RR";
+enum alg_type
+{
+	FCFS,
+	SJF,
+	SRT,
+	RR
+};
 
 struct process {
 	bool done = false;
@@ -152,7 +153,25 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 	int finished = 0; // number of procs finished
 
 	// more stuff here
-	std::cout << "time " << timer << "ms: Simulator started for " + at + " ";
+	
+	std::cout << "time " << timer << "ms: Simulator started for ";
+	switch(at)
+	{
+		case FCFS:
+			std::cout << "FCFS ";
+			break;
+		case SJF:
+			std::cout << "SJF ";
+			break;
+		case SRT:
+			std::cout << "SRT ";
+			break;
+		case RR:
+			std::cout << "RR ";
+			break;
+		default:
+			break;	
+	}
 	printq(ready_queue);	
 	while(finished < n_procs)
 	{
