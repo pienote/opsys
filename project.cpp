@@ -84,7 +84,7 @@ void printq(std::vector<process*> q)
 	{
 		for(int i = 0; i < q.size(); i++)
 		{
-			std::cout << q[i];
+			std::cout << q[i]->id;
 			if(i != q.size() - 1)
 				std::cout << " "; 
 		}
