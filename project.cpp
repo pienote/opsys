@@ -1,6 +1,14 @@
-// g++ project.cpp -o a.out -lm
-// ./a.out 1 2 0.01 200 4 0.5 120
+/*
+g++ project.cpp -o a.out -lm
+./a.out 1 2 0.01 256 4 0.5 128
+Test 2     ./a.out 1 2 0.01 256 4 0.5 128
 
+Test 3     ./a.out 2 2 0.01 256 4 0.5 128
+
+Test 4     ./a.out 16 2 0.01 256 4 0.75 64
+
+Test 5     ./a.out 8 64 0.001 4096 4 0.5 2048
+*/
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
