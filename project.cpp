@@ -231,7 +231,7 @@ int main(int argc, char* argv[])
 	double lambda = atof(argv[3]);
 	int upper = atoi(argv[4]);
 	unsigned int t_cs = atoi(argv[5]);
-	int alpha = atoi(argv[6]);
+	double alpha = atof(argv[6]);
 	int t_slice = atoi(argv[7]);
 	std::string rr_add;
 	if(argc == 9 && strcmp(argv[8], "BEGINNING") == 0)
