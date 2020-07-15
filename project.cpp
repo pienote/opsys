@@ -1,12 +1,13 @@
+//Group: Tommy Cesard, Phillip Chang, Money Brown, My Name Jeff
+//CSCI 4210
+//Project 1
+
 /*
 g++ project.cpp -o a.out -lm
 ./a.out 1 2 0.01 256 4 0.5 128
 Test 2     ./a.out 1 2 0.01 256 4 0.5 128
-
 Test 3     ./a.out 2 2 0.01 256 4 0.5 128
-
 Test 4     ./a.out 16 2 0.01 256 4 0.75 64
-
 Test 5     ./a.out 8 64 0.001 4096 4 0.5 2048
 */
 #include <math.h>
@@ -20,13 +21,6 @@ Test 5     ./a.out 8 64 0.001 4096 4 0.5 2048
 #include <string>
 #include <vector>
 
-enum alg_type
-{
-	FCFS,
-	SJF,
-	SRT,
-	RR
-};
 
 struct process {
 	bool done = false;
@@ -101,12 +95,79 @@ void printq(std::vector<process*> q)
 	std::cout << "]\n";
 }
 
-//void sjf_algorithm(std::vector<process*> procs, std::vector<process*> rdy_q, int t_cs, int time)
-//{
+//Runs the FCFS CPU scheduling algorithm and returns a list containing
+//[average wait time time, average turnaround time, # of context switches, # of preemptions]
+std::vector<int> FCFS(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs)
+{
+	for(int i = 0; i < procs.size(); i++)
+	{
+		std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts\n";
+	}
+	std::cout << "time 0ms: Simulator started for FCFS [Q <empty>]\n";
+	/*
+		do shit
+	*/
+	std::vector<int> temp = {0, 0, 0, 0};
+	return temp;
+}
 
-//}
+//Runs the SJF CPU scheduling algorithm and returns a list containing
+//[average wait time time, average turnaround time, # of context switches, # of preemptions]
+std::vector<int> SJF(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs)
+{
+	for(int i = 0; i < procs.size(); i++)
+	{
+		std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts\n";
+	}
+	std::cout << "time 0ms: Simulator started for SJF [Q <empty>]\n";
+	/*
+		do shit
+	*/
+	std::vector<int> temp = {0, 0, 0, 0};
+	return temp;
+}
 
-void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double alpha, int t_slice, alg_type at, FILE* out, std::string rr_add="END")
+//Runs the SRT CPU scheduling algorithm and returns a list containing
+//[average wait time time, average turnaround time, # of context switches, # of preemptions]
+std::vector<int> SRT(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs)
+{
+	for(int i = 0; i < procs.size(); i++)
+	{
+		std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts\n";
+	}
+	std::cout << "time 0ms: Simulator started for SRT [Q <empty>]\n";
+	/*
+		do shit
+	*/
+	std::vector<int> temp = {0, 0, 0, 0};
+	return temp;
+}
+
+//Runs the RR CPU scheduling algorithm and returns a list containing
+//[average wait time time, average turnaround time, # of context switches, # of preemptions]
+std::vector<int> RR(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs)
+{
+	for(int i = 0; i < procs.size(); i++)
+	{
+		std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts\n";
+	}
+	std::cout << "time 0ms: Simulator started for RR [Q <empty>]\n";
+	/*
+		do shit
+	*/
+	std::vector<int> temp = {0, 0, 0, 0};
+	return temp;
+}
+
+//Prints stats to the required output file
+void print_stats(std::string alg, std::vector<int> data, FILE* out)
+{
+	/*
+		print shit
+	*/
+}
+
+void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double alpha, int t_slice, FILE* out, std::string rr_add="END")
 {
 	std::map<char, process*> proc_map; // letter->process with letter
 	std::vector<process*> procs; // all the processes
@@ -135,13 +196,6 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 			proc->cpu_bursts[i] = ceil(exp_random(lambda, upper));
 			if(i != proc->n_bursts-1) proc->io_bursts[i] = ceil(exp_random(lambda, upper));
 		}
-		// for(int i = 0; i < proc->cpu_bursts.size(); i++)
-		//	std::cout << proc->cpu_bursts[i] << " ";		
-		//std::cout << std::endl;
-		//for(int i = 0; i < proc->io_bursts.size(); i++)
-		//	std::cout << proc->io_bursts[i] << " ";		
-
-		std::cout << "Process " << proc->id << " [NEW] (arrival time " << proc->arr_time << " ms) " << proc->n_bursts << " CPU bursts\n";
 		proc_map.insert(std::pair<char, process*>(c, proc));
 		procs.push_back(proc);	
 		// finish setting up the processes
@@ -149,60 +203,16 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 
 	std::sort(procs.begin(), procs.end());	
 
-	process* p1 = procs.front(); 
-	// probably need more variables here
-	process* cpu_burst_proc = NULL; // in current use
-	process* io_burst_proc = NULL;
-
-	std::vector<process*> ready_queue; // the ready queue
-	int num_con_switches = 0;
-	int num_preempts = 0;
-	bool done = false;
-	int timer = 0;
-	int finished = 0; // number of procs finished
-	// more stuff here
+	std::vector<int> data;
 	
-	std::cout << "time " << timer << "ms: Simulator started for ";
-	switch(at)
-	{
-		case FCFS:
-			std::cout << "FCFS ";
-			break;
-		case SJF:
-			std::cout << "SJF ";
-			break;
-		case SRT:
-			std::cout << "SRT ";
-			break;
-		case RR:
-			std::cout << "RR ";
-			break;
-		default:
-		 	break;	
-	}
-	printq(ready_queue);	
-	// logic here
-	while(finished < n_procs)
-	{
-		switch(at)
-		{
-			case FCFS:
-				break;
-			case SJF:
-				
-				
-				break;
-			case SRT:
-				break;
-			case RR:
-				break;
-			default:
-				break;	
-		}
-		timer++;
-	}
-	// file write here
-
+	data = FCFS(proc_map, procs, t_cs);
+	print_stats("FCFS", data, out);
+	data = SJF(proc_map, procs, t_cs);
+	print_stats("SJF", data, out);
+	data = SRT(proc_map, procs, t_cs);
+	print_stats("SRT", data, out);
+	data = RR(proc_map, procs, t_cs);
+	print_stats("RR", data, out);
 }	
 
 int main(int argc, char* argv[])
@@ -228,13 +238,8 @@ int main(int argc, char* argv[])
 		rr_add = "BEGINNING";
 
 	out = fopen("simout.txt", "w");	
-	// RUN FCFS
-//	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, FCFS, out);	
-	// RUN SJF
-	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, SJF, out);	
-	// RUN SRT
-//	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, SRT, out);	
-	// RUN RR
-//	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, RR, out, rr_add);	
+
+	start_sim(n, seed, lambda, upper, t_cs, alpha, t_slice, out);	
+
 	return EXIT_SUCCESS;
 }
