@@ -62,7 +62,7 @@ struct process {
 };
 
 struct CPU {
-	process * curr_proc = NULL; //current process CPU is being occupied by
+	process * curr_proc = NULL;     //current process CPU is being occupied by
 	int rem_burst_time = 0;			//If process is being run, how much longer until command switch completes
 	int switch_in_time = 0;			//If process is switching into the CPU, how much longer until CPU burst can be excuted
 	int switch_out_time = 0;		//If process is switching out of the CPU, how much longer until another process can switch in
@@ -154,6 +154,9 @@ std::vector<int> SRT(std::map<char, process*> proc_map, std::vector<process*> pr
 //[average wait time time, average turnaround time, # of context switches, # of preemptions]
 std::vector<int> RR(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs, int t_slice, std::string rr_add)
 {
+/*##################################################################*/
+	bool full_output = true;
+/*##################################################################*/
 	for(int i = 0; i < procs.size(); i++)
 	{
 		std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts\n";
@@ -161,10 +164,13 @@ std::vector<int> RR(std::map<char, process*> proc_map, std::vector<process*> pro
 	std::cout << "time 0ms: Simulator started for RR [Q <empty>]\n";
 	std::vector<int> data = {0, 0, 0, 0};
 	int time = 0;
+	int rem_slice_time;
+	int total_cs = 0;
+	int total_preemptions = 0;
 	int procs_completed = 0;
 	std::vector<process*> readyQ;
 	CPU* cpu = new CPU();
-	while(procs_completed < procs.size() and time < 9999)
+	while(procs_completed < procs.size())
 	{
 		//Decrement rem_burst_time/switch_in_time/switch_out_time
 		if(cpu->curr_proc != NULL)
@@ -184,33 +190,69 @@ std::vector<int> RR(std::map<char, process*> proc_map, std::vector<process*> pro
 						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " terminated ";
 						printq(readyQ);
 						terminated = true;
+						procs_completed++;
 					}
 					else
 					{
-						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " completed a CPU burst; " << cpu->curr_proc->rem_bursts << " to go ";
-						printq(readyQ);
-
+						if(full_output || time < 1000)
+						{
+							std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " completed a CPU burst; " << cpu->curr_proc->rem_bursts << " to go ";
+							printq(readyQ);
+						}
 					}
 
 					//If process was not terminate, calculate time until I/O burst completion
 					if(!terminated)
 					{
-						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " switching out of CPU; will block on I/O until time "
-						<< time + t_cs/2 + cpu->curr_proc->io_bursts[cpu->curr_proc->io_index] << "ms ";
-						printq(readyQ);
-						//Process starts I/O burst and CPU is locked for t_cs/2
-
-
-
-						//**************I/O***********************
-
-
+						if(full_output || time < 1000)
+						{
+							std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " switching out of CPU; will block on I/O until time "
+							<< time + t_cs/2 + cpu->curr_proc->io_bursts[cpu->curr_proc->io_index] << "ms ";
+							printq(readyQ);
+						}
+						cpu->curr_proc->rem_burst_time = t_cs/2 + cpu->curr_proc->io_bursts[cpu->curr_proc->io_index] + 1;
 						cpu->curr_proc->io_index++;
 					}
-					cpu->curr_proc = NULL;
+					cpu->curr_proc->cpu_index++;
 					cpu->rem_burst_time = 0;
 					cpu->switch_in_time = 0;
 					cpu->switch_out_time = t_cs/2;
+				}
+				rem_slice_time -= 1;
+				//Check if slice time ran out
+				if(rem_slice_time == 0)
+				{
+					//If there is a process to actuall preempt the CPU process
+					if(readyQ.size() > 0)
+					{
+						if(full_output || time < 1000)
+						{
+							std::cout << "time " << time << "ms: Time slice expired; process " << cpu->curr_proc->id << " preempted with "
+							<< cpu->rem_burst_time << "ms to go ";
+							printq(readyQ);
+						}
+						total_preemptions += 1;
+						cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] = cpu->rem_burst_time;
+						if(!rr_add.compare("BEGINNING"))
+						{
+							readyQ.insert(readyQ.begin(), cpu->curr_proc);
+						}
+						else
+						{
+							readyQ.push_back(cpu->curr_proc);
+						}
+						cpu->rem_burst_time = 0;
+						cpu->switch_in_time = 0;
+						cpu->switch_out_time = t_cs/2;
+					}
+					else
+					{
+						if(full_output || time < 1000)
+						{
+							std::cout << "time " << time << "ms: Time slice expired; no preemption because ready queue is empty ";
+							printq(readyQ);
+						}
+					}
 				}
 			}
 			//If a process is currently being switched in to the CPU
@@ -220,11 +262,15 @@ std::vector<int> RR(std::map<char, process*> proc_map, std::vector<process*> pro
 				//New process begins CPU burst
 				if(cpu->switch_in_time == 0)
 				{
-					std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " started using the CPU for "
-					<< cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] << "ms burst ";
-					printq(readyQ);
+					if(full_output || time < 1000)
+					{
+						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " started using the CPU for "
+						<< cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] << "ms burst ";
+						printq(readyQ);
+					}
+					total_cs += 1;
 					cpu->rem_burst_time = cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index];
-					cpu->curr_proc->cpu_index++;
+					rem_slice_time = t_slice;
 				}
 			}
 			//If a process is currently being switched out of the CPU
@@ -258,10 +304,39 @@ std::vector<int> RR(std::map<char, process*> proc_map, std::vector<process*> pro
 					readyQ.push_back(procs[i]);
 				}
 				//print out readyQ
-				std::cout << "time " << time << "ms : Process " << procs[i]->id  << " arrived; added to ready queue ";
-				printq(readyQ);
+				if(full_output || time < 1000)
+				{
+					std::cout << "time " << time << "ms: Process " << procs[i]->id  << " arrived; added to ready queue ";
+					printq(readyQ);
+				}
 			}
 		}
+
+		//Check if a process finishes performing I/O
+		for(int i = 0; i < procs.size(); i++)
+		{
+			if(procs[i]->rem_burst_time > 0)
+			{
+				procs[i]->rem_burst_time -= 1;
+				if(procs[i]->rem_burst_time == 0)
+				{
+					if(!rr_add.compare("BEGINNING"))
+					{
+						readyQ.insert(readyQ.begin(), procs[i]);
+					}
+					else
+					{
+						readyQ.push_back(procs[i]);
+					}
+					if(full_output || time < 1000)
+					{
+						std::cout << "time " << time << "ms: Process " << procs[i]->id  << " completed I/O; added to ready queue ";
+						printq(readyQ);
+					}
+				}
+			}
+		}
+
 		//Check if a process starts using the CPU
 		if(cpu->curr_proc == NULL && readyQ.size() > 0)
 		{
@@ -269,13 +344,16 @@ std::vector<int> RR(std::map<char, process*> proc_map, std::vector<process*> pro
 			readyQ.erase(readyQ.begin());
 			cpu->switch_in_time = t_cs/2;
 		}
-		//Check for process preemption
 
-		//Check if a process finishes performing I/O
-
+		//Incremet wait time for every process in the readyQ
+		for(int i = 0; i < readyQ.size(); i++)
+		{
+			readyQ[i]->wait_time += 1;
+		}
 		time++;
 	}
-	std::cout << "time " << time << "ms : Simulator ended for RR [Q <empty>]\n";
+	time++;
+	std::cout << "time " << time << "ms: Simulator ended for RR [Q <empty>]\n";
 	return data;
 }
 
