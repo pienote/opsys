@@ -151,6 +151,7 @@ std::vector<double> RR(std::map<char, process*> proc_map, std::vector<process*> 
 			std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts\n";
 		else
 			std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU burst\n";
+	}
 	std::cout << "time 0ms: Simulator started for " << alg << " [Q <empty>]\n";
 	std::vector<double> data = {0, 0, 0, 0};
 	int time = 0;
@@ -205,7 +206,8 @@ std::vector<double> RR(std::map<char, process*> proc_map, std::vector<process*> 
 					}
 					//std::cout << "TURNAROUND TIME: Process " << cpu->curr_proc->id << " started at " << cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index]
 					//<< "ms ended at " << time << "ms\n";
-					cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index] = time + t_cs - cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index];
+					int start_time = cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index];
+					cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index] = time + t_cs/2 - start_time;
 					cpu->curr_proc->cpu_index++;
 					cpu->rem_burst_time = 0;
 					cpu->switch_in_time = 0;
@@ -267,10 +269,12 @@ std::vector<double> RR(std::map<char, process*> proc_map, std::vector<process*> 
 					total_cs += 1;
 					cpu->rem_burst_time = cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index];
 					rem_slice_time = t_slice;
+					/*
 					if(cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index] == 0)
 					{
 						cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index] = time;
 					}
+					*/
 				}
 			}
 			//If a process is currently being switched out of the CPU
@@ -320,6 +324,10 @@ std::vector<double> RR(std::map<char, process*> proc_map, std::vector<process*> 
 					std::cout << "time " << time << "ms: Process " << procs[i]->id  << " arrived; added to ready queue ";
 					printq(readyQ);
 				}
+				if(procs[i]->turnaround_times[procs[i]->cpu_index] == 0)
+				{
+					procs[i]->turnaround_times[procs[i]->cpu_index] = time;
+				}
 			}
 		}
 
@@ -338,6 +346,10 @@ std::vector<double> RR(std::map<char, process*> proc_map, std::vector<process*> 
 					else
 					{
 						readyQ.push_back(procs[i]);
+					}
+					if(procs[i]->turnaround_times[procs[i]->cpu_index] == 0)
+					{
+						procs[i]->turnaround_times[procs[i]->cpu_index] = time;
 					}
 					if(full_output || time < 1000)
 					{
@@ -390,7 +402,10 @@ std::vector<double> RR(std::map<char, process*> proc_map, std::vector<process*> 
 void print_stats(std::string alg, double ave_cpu_bt, std::vector<double> data, FILE* out)
 {
 	if(alg == "FCFS")
+	{
 		fprintf(out, "Algorithm FCFS\n");
+		//data[1] += data[0]; 
+	}
 	else if(alg == "SJF")
 		fprintf(out, "Algorithm SJF\n");
 	else if(alg == "SRT")
