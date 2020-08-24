@@ -1,2 +1,2 @@
 # opsys
-The Project
+Process Scheduling Project
