@@ -34,15 +34,20 @@ struct process {
 
 	int wait_time;
 
+	int start_cpu_time;
+	int end_cpu_time;
+
 	int n_bursts;
 	int rem_bursts;	// remaining
 	
+	int adjusted_tau;
 	int tau;
 	int turnaround_time;
 
 	int cpu_index;	// which cpu burst it is on
 	int io_index;
 	
+	std::vector<int> orig_cpu_bursts; // original cpu bursts
 	std::vector<int> cpu_bursts;
 	std::vector<int> io_bursts;
 	std::vector<int> turnaround_times;
@@ -70,6 +75,43 @@ struct CPU {
 	int switch_in_time = 0;			//If process is switching into the CPU, how much longer until CPU burst can be excuted
 	int switch_out_time = 0;		//If process is switching out of the CPU, how much longer until another process can switch in
 };
+
+int insert_proc_adj(std::vector<process*>& rq, process* p)
+{
+	unsigned int i;
+	for(i = 0; i < rq.size(); i++)
+	{
+		//std::cout << p->tau << (p->cpu_bursts[p->cpu_index]) << (p->rem_burst_time) << " " << rq[i]->tau << " ";
+		if(p->adjusted_tau < rq[i]->adjusted_tau)
+		{
+			return i;
+		}
+		else if(p->adjusted_tau == rq[i]->adjusted_tau && p->id < rq[i]->id)
+		{
+			return i;
+		}
+	}
+	return i;
+}
+
+int insert_proc_sjf(std::vector<process*>& rq, process* p)
+{
+	unsigned int i;
+	for(i = 0; i < rq.size(); i++)
+	{
+		//std::cout << p->tau << (p->cpu_bursts[p->cpu_index]) << (p->rem_burst_time) << " " << rq[i]->tau << " ";
+		if(p->tau < rq[i]->tau)
+		{
+			return i;
+		}
+		else if(p->tau == rq[i]->tau && p->id < rq[i]->id)
+		{
+			return i;
+		}
+	}
+	return i;
+}
+
 
 double exp_random(double lambda, int upper)
 {
@@ -108,34 +150,470 @@ void printq(std::vector<process*> q)
 
 //Runs the SJF CPU scheduling algorithm and returns a list containing
 //[average wait time time, average turnaround time, # of context switches, # of preemptions]
-std::vector<double> SJF(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs)
+std::vector<double> SJF(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs, double alpha)
 {
+/*##################################################################*/
+	bool full_output = false;
+/*##################################################################*/
 	for(unsigned int i = 0; i < procs.size(); i++)
 	{
-		std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts\n";
+		if(procs[i]->n_bursts > 1)
+			std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts (tau "<< procs[i]->tau<<"ms)\n";
+		else
+			std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU burst (tau "<< procs[i]->tau<<"ms)\n";
 	}
 	std::cout << "time 0ms: Simulator started for SJF [Q <empty>]\n";
-	/*
-		do shit
-	*/
-	std::vector<double> temp = {0, 0, 0, 0};
-	return temp;
+	std::vector<double> data = {0, 0, 0, 0};
+	int time = 0;
+	int total_cs = 0;
+	int procs_completed = 0;
+	double total_preemptions = 0;
+	std::vector<process*> readyQ;
+	CPU* cpu = new CPU();
+	while((unsigned)procs_completed < procs.size())
+	{
+		//Decrement rem_burst_time/switch_in_time/switch_out_time
+		if(cpu->curr_proc != NULL)
+		{
+			//If CPU burst is running
+			if(cpu->rem_burst_time != 0)
+			{
+				cpu->rem_burst_time -= 1;
+				//Check if process finished burst
+				if(cpu->rem_burst_time == 0)
+				{
+					bool terminated = false;
+					cpu->curr_proc->rem_bursts -= 1;
+					//Check if process terminated
+					if(cpu->curr_proc->rem_bursts == 0)
+					{
+						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " terminated ";
+						printq(readyQ);
+						terminated = true;
+						procs_completed++;
+					}
+					else
+					{
+						if(full_output || time < 1000)
+						{
+							if(cpu->curr_proc->rem_bursts>1){
+								std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " (tau "<<cpu->curr_proc->tau<<"ms) completed a CPU burst; " << cpu->curr_proc->rem_bursts << " bursts to go ";
+							}
+							else{
+								std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " (tau "<<cpu->curr_proc->tau<<"ms) completed a CPU burst; " << cpu->curr_proc->rem_bursts << " burst to go ";
+							
+							}
+							printq(readyQ);
+						}
+					}
+
+					//If process was not terminate, calculate time until I/O burst completion
+					if(!terminated)
+					{
+
+						cpu->curr_proc->tau =  ceil(alpha * cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] + (1 - alpha) * cpu->curr_proc->tau);
+						if(full_output || time < 1000)
+						{
+							std::cout << "time " << time << "ms: Recalculated tau = " << cpu->curr_proc->tau << "ms for process " << cpu->curr_proc->id << " ";
+							printq(readyQ);
+							std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " switching out of CPU; will block on I/O until time "
+							<< time + t_cs/2 + cpu->curr_proc->io_bursts[cpu->curr_proc->io_index] << "ms ";
+							printq(readyQ);
+						}
+						cpu->curr_proc->rem_burst_time = t_cs/2 + cpu->curr_proc->io_bursts[cpu->curr_proc->io_index] + 1;
+						cpu->curr_proc->io_index++;
+					}
+					int start_time = cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index];
+					cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index] = time + t_cs/2 - start_time;
+					cpu->curr_proc->cpu_index++;
+					cpu->rem_burst_time = 0;
+					cpu->switch_in_time = 0;
+					cpu->switch_out_time = t_cs/2;
+				}
+			}
+			//If a process is currently being switched in to the CPU
+			else if(cpu->switch_in_time != 0)
+			{
+				cpu->switch_in_time -= 1;
+				//New process begins CPU burst
+				if(cpu->switch_in_time == 0)
+				{
+					if(full_output || time < 1000)
+					{
+
+						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " (tau "<<cpu->curr_proc->tau<<"ms) started using the CPU for "
+						<< cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] << "ms burst ";
+						printq(readyQ);
+	
+			
+					}
+					cpu->curr_proc->preempt = false;
+					total_cs += 1;
+					cpu->rem_burst_time = cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index];
+				}
+			}
+			//If a process is currently being switched out of the CPU
+			else if(cpu->switch_out_time != 0)
+			{
+				cpu->switch_out_time -= 1;
+				if(cpu->switch_out_time == 0)
+				{
+					cpu->curr_proc = NULL;
+				}
+			}
+			else
+			{
+				std::cerr << "ERROR: CPU occupied by dead process\n";
+				return data;
+			}
+		}
+
+		//Check if a process arrives
+		for(unsigned int i = 0; i < procs.size(); i++)
+		{
+			if(procs[i]->arr_time == time)
+			{
+
+
+				int ind = insert_proc_sjf(readyQ,procs[i]);
+				readyQ.insert(readyQ.begin()+ind, procs[i]);
+				//print out readyQ
+				if(full_output || time < 1000)
+				{
+					std::cout << "time " << time << "ms: Process " << procs[i]->id  << " (tau "<<procs[i]->tau<<"ms) arrived; added to ready queue ";
+					printq(readyQ);
+				}
+				if(procs[i]->turnaround_times[procs[i]->cpu_index] == 0)
+				{
+					procs[i]->turnaround_times[procs[i]->cpu_index] = time;
+				}
+			}
+		}
+
+		//Check if a process finishes performing I/O
+		for(unsigned int i = 0; i < procs.size(); i++)
+		{
+			if(procs[i]->rem_burst_time > 0)
+			{
+				procs[i]->rem_burst_time -= 1;
+				if(procs[i]->rem_burst_time == 0)
+				{
+					int ind = insert_proc_sjf(readyQ,procs[i]);
+					readyQ.insert(readyQ.begin()+ind, procs[i]);
+					if(procs[i]->turnaround_times[procs[i]->cpu_index] == 0)
+					{
+						procs[i]->turnaround_times[procs[i]->cpu_index] = time;
+					}
+					if(full_output || time < 1000)
+					{
+						std::cout << "time " << time << "ms: Process " << procs[i]->id  << " (tau "<<procs[i]->tau<<"ms) completed I/O; added to ready queue ";
+						printq(readyQ);
+					}
+					//procs[i]->wait_time += t_cs/2;
+				}
+			}
+		}
+
+		//Check if a process starts using the CPU
+		if(cpu->curr_proc == NULL && readyQ.size() > 0)
+		{
+			cpu->curr_proc = readyQ[0];
+			readyQ.erase(readyQ.begin());
+			cpu->switch_in_time = t_cs/2;
+		}
+
+		//Incremet wait time for every process in the readyQ
+		for(unsigned int i = 0; i < readyQ.size(); i++)
+		{
+			readyQ[i]->wait_time += 1;
+		}
+		time++;
+	}
+	time++;
+	std::cout << "time " << time << "ms: Simulator ended for SJF [Q <empty>]\n";
+	int total_wait_time = 0;
+	int num_cpu_bursts = 0;
+	int total_turnaround_time = 0;
+	for(unsigned int i = 0; i < procs.size(); i++)
+	{
+		total_wait_time += procs[i]->wait_time;
+		num_cpu_bursts += procs[i]->cpu_bursts.size();
+		for(unsigned int j = 0; j < procs[i]->cpu_bursts.size(); j++)
+		{
+			total_turnaround_time += procs[i]->turnaround_times[j];
+		}
+	}
+	data[0] = (double)total_wait_time/num_cpu_bursts;
+	data[1] = (double)total_turnaround_time/num_cpu_bursts;
+	data[2] = (double)total_cs;
+	data[3] = (double)total_preemptions;	
+	return data;
 }
+
 
 //Runs the SRT CPU scheduling algorithm and returns a list containing
 //[average wait time time, average turnaround time, # of context switches, # of preemptions]
-std::vector<double> SRT(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs)
+std::vector<double> SRT(std::map<char, process*> proc_map, std::vector<process*> procs, int t_cs, double alpha)
 {
+/*##################################################################*/
+	bool full_output = false;
+/*##################################################################*/
 	for(unsigned int i = 0; i < procs.size(); i++)
 	{
-		std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts\n";
+		if(procs[i]->n_bursts > 1)
+			std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU bursts (tau "<< procs[i]->tau<<"ms)\n";
+		else
+			std::cout << "Process " << procs[i]->id << " [NEW] (arrival time " << procs[i]->arr_time << " ms) " << procs[i]->n_bursts << " CPU burst (tau "<< procs[i]->tau<<"ms)\n";
 	}
 	std::cout << "time 0ms: Simulator started for SRT [Q <empty>]\n";
-	/*
-		do shit
-	*/
-	std::vector<double> temp = {0, 0, 0, 0};
-	return temp;
+	std::vector<double> data = {0, 0, 0, 0};
+	int time = 0;
+	int total_cs = 0;
+	int rem_proc_time;
+	int procs_completed = 0;
+	int total_preemptions = 0;
+	std::vector<process*> readyQ;
+	CPU* cpu = new CPU();
+	while((unsigned)procs_completed < procs.size())
+	{
+		//Decrement rem_burst_time/switch_in_time/switch_out_time
+		if(cpu->curr_proc != NULL)
+		{
+			//If CPU burst is running
+			if(cpu->rem_burst_time != 0)
+			{
+				cpu->rem_burst_time -= 1;
+				//Check if process finished burst
+				if(cpu->rem_burst_time == 0)
+				{
+					bool terminated = false;
+					cpu->curr_proc->rem_bursts -= 1;
+					//Check if process terminated
+					if(cpu->curr_proc->rem_bursts == 0)
+					{
+						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " terminated ";
+						printq(readyQ);
+						terminated = true;
+						procs_completed++;
+					}
+					else
+					{
+						if(full_output || time < 1000)
+						{
+							std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " (tau "<<cpu->curr_proc->tau<<"ms) completed a CPU burst; " << cpu->curr_proc->rem_bursts << " burst";
+							if(cpu->curr_proc->rem_bursts > 1)
+								std::cout << "s";
+							std::cout<< " to go ";
+							printq(readyQ);
+						}
+					}
+
+					//If process was not terminate, calculate time until I/O burst completion
+					if(!terminated)
+					{
+						cpu->curr_proc->tau =  ceil(alpha * cpu->curr_proc->orig_cpu_bursts[cpu->curr_proc->cpu_index] + (1 - alpha) * cpu->curr_proc->tau);
+						cpu->curr_proc->adjusted_tau = cpu->curr_proc->tau;
+						if(full_output || time < 1000)
+						{
+							// std::cout << cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] << " " << cpu->curr_proc->tau << " ";
+							
+							std::cout << "time " << time << "ms: Recalculated tau = " << cpu->curr_proc->tau << "ms for process " << cpu->curr_proc->id << " ";
+							printq(readyQ);
+							std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " switching out of CPU; will block on I/O until time "
+							<< time + t_cs/2 + cpu->curr_proc->io_bursts[cpu->curr_proc->io_index] << "ms ";
+							printq(readyQ);
+						}
+						cpu->curr_proc->rem_burst_time = t_cs/2 + cpu->curr_proc->io_bursts[cpu->curr_proc->io_index] + 1;
+						cpu->curr_proc->io_index++;
+					}
+					//std::cout << "TURNAROUND TIME: Process " << cpu->curr_proc->id << " started at " << cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index]
+					//<< "ms ended at " << time << "ms\n";
+					int start_time = cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index];
+                    cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index] = time + t_cs/2 - start_time;
+					cpu->curr_proc->cpu_index++;
+					cpu->rem_burst_time = 0;
+					cpu->switch_in_time = 0;
+					cpu->switch_out_time = t_cs/2;
+				}
+				rem_proc_time--;
+			}
+			
+			//If a process is currently being switched in to the CPU
+			else if(cpu->switch_in_time != 0)
+			{
+				cpu->switch_in_time -= 1;
+				//New process begins CPU burst
+				if(cpu->switch_in_time == 0)
+				{
+					if(full_output || time < 1000)
+					{
+
+						std::cout << "time " << time << "ms: Process " << cpu->curr_proc->id << " (tau "<<cpu->curr_proc->tau<< "ms) started using the CPU with "
+						<< cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] << "ms burst remaining ";
+						printq(readyQ);
+	
+			
+					}
+					cpu->curr_proc->start_cpu_time = time;
+					total_cs += 1;
+					cpu->rem_burst_time = cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index];
+					rem_proc_time = cpu->rem_burst_time;
+					//printf("%d, %d", cpu->curr_proc->tau - (cpu->curr_proc->orig_cpu_bursts[cpu->curr_proc->cpu_index] - cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index]), readyQ[0]->tau);
+					if(cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index] == 0)
+					{
+						cpu->curr_proc->turnaround_times[cpu->curr_proc->cpu_index] = time;
+					}
+					if(readyQ.size() > 0 && (cpu->curr_proc->adjusted_tau > readyQ[0]->adjusted_tau))
+					{
+						// preempt stuff
+						// printf("bb");
+						cpu->curr_proc->preempt = true;
+						if(full_output || time < 1000)
+						{
+							std::cout << "time " << time << "ms: Process " << readyQ[0]->id << " (tau " << readyQ[0]->tau << "ms) will preempt " << cpu->curr_proc->id << " ";
+							printq(readyQ);
+						}
+						total_preemptions += 1;
+						cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] = cpu->rem_burst_time;
+						cpu->rem_burst_time = 0;
+						cpu->switch_in_time = 0;
+						cpu->switch_out_time = t_cs/2;
+					}
+					else
+					{
+						cpu->curr_proc->preempt = false;
+					}
+				}
+			}
+			//If a process is currently being switched out of the CPU
+			else if(cpu->switch_out_time != 0)
+			{
+				cpu->switch_out_time -= 1;
+				if(cpu->switch_out_time == 0)
+				{
+					if(cpu->curr_proc->preempt)
+					{
+
+						int ind = insert_proc_adj(readyQ, cpu->curr_proc);
+						readyQ.insert(readyQ.begin()+ind, cpu->curr_proc);
+					}
+					cpu->curr_proc->start_cpu_time = 0;
+					cpu->curr_proc = NULL;
+				}
+			}
+			else
+			{
+				if((unsigned)procs_completed >= procs.size())
+					break;
+				std::cerr << "ERROR: CPU occupied by dead process\n";
+
+				return data;
+			}
+		}
+
+		//Check if a process arrives
+		for(unsigned int i = 0; i < procs.size(); i++)
+		{
+			if(procs[i]->arr_time == time)
+			{
+				int ind = insert_proc_adj(readyQ, procs[i]);
+				readyQ.insert(readyQ.begin()+ind, procs[i]);
+				
+				if(procs[i]->turnaround_times[procs[i]->cpu_index] == 0)
+					procs[i]->turnaround_times[procs[i]->cpu_index] = time;
+				//print out readyQ
+				if(full_output || time < 1000)
+				{
+					std::cout << "time " << time << "ms: Process " << procs[i]->id  << " (tau "<<procs[i]->tau<<"ms) arrived; added to ready queue ";
+					printq(readyQ);
+				}
+			}
+		}
+
+		//Check if a process finishes performing I/O
+		for(unsigned int i = 0; i < procs.size(); i++)
+		{
+			if(procs[i]->rem_burst_time > 0)
+			{
+				procs[i]->rem_burst_time -= 1;
+				if(procs[i]->rem_burst_time == 0)
+				{
+					//if(cpu->curr_proc != NULL)
+					//	printf("%d %d", procs[i]->adjusted_tau, cpu->curr_proc->rem_burst_time);
+					// get tau of 1st element and compare
+					// if less than, preempt current process
+					if(procs[i]->turnaround_times[procs[i]->cpu_index] == 0)
+						procs[i]->turnaround_times[procs[i]->cpu_index] = time;
+					if(cpu->curr_proc != NULL && !cpu->curr_proc->preempt && ((cpu->curr_proc->adjusted_tau - (time - cpu->curr_proc->start_cpu_time) > procs[i]->tau) && cpu->curr_proc != procs[i] && cpu->switch_in_time == 0 && cpu->switch_out_time == 0))
+					{
+						// preempt stuff
+						cpu->curr_proc->preempt = true;
+						readyQ.insert(readyQ.begin(), procs[i]);
+						
+						if(full_output || time < 1000)
+						{
+							std::cout << "time " << time << "ms: Process " << procs[i]->id << " (tau " << procs[i]->tau << "ms) completed I/O; preempting " << cpu->curr_proc->id << " ";
+							
+							printq(readyQ);
+						}
+						total_preemptions += 1;
+						int temp = cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index];
+						cpu->curr_proc->cpu_bursts[cpu->curr_proc->cpu_index] = cpu->rem_burst_time;
+						cpu->curr_proc->adjusted_tau -= temp - cpu->rem_burst_time;
+						// printf("%d, %d", cpu->curr_proc->adjusted_tau, cpu->rem_burst_time);
+						cpu->rem_burst_time = 0;
+						cpu->switch_in_time = 0;
+						cpu->switch_out_time = t_cs/2;
+					}
+					else
+					{
+						int ind = insert_proc_adj(readyQ, procs[i]);
+						readyQ.insert(readyQ.begin()+ind, procs[i]);
+						if(full_output || time < 1000)
+						{
+							std::cout << "time " << time << "ms: Process " << procs[i]->id  << " (tau "<<procs[i]->tau<<"ms) completed I/O; added to ready queue ";
+							printq(readyQ);
+						}
+						//procs[i]->wait_time += t_cs/2;
+					}
+				}
+			}
+		}
+
+		//Check if a process starts using the CPU
+		if(cpu->curr_proc == NULL && readyQ.size() > 0)
+		{
+			cpu->curr_proc = readyQ[0];
+			readyQ.erase(readyQ.begin());
+			cpu->switch_in_time = t_cs/2;
+		}
+
+		//Incremet wait time for every process in the readyQ
+		for(unsigned int i = 0; i < readyQ.size(); i++)
+		{
+			readyQ[i]->wait_time += 1;
+		}
+		time++;
+	}
+	time++;
+	std::cout << "time " << time << "ms: Simulator ended for SRT [Q <empty>]\n";
+	int total_wait_time = 0;
+	int num_cpu_bursts = 0;
+	int total_turnaround_time = 0;
+	for(unsigned int i = 0; i < procs.size(); i++)
+	{
+		total_wait_time += procs[i]->wait_time;
+		num_cpu_bursts += procs[i]->cpu_bursts.size();
+		for(unsigned int j = 0; j < procs[i]->cpu_bursts.size(); j++)
+		{
+			total_turnaround_time += procs[i]->turnaround_times[j];
+		}
+	}
+	data[0] = (double)total_wait_time/num_cpu_bursts;
+	data[1] = (double)total_turnaround_time/num_cpu_bursts;
+	data[2] = (double)total_cs;
+	data[3] = (double)total_preemptions;	
+	return data;
 }
 
 //Runs the RR CPU scheduling algorithm and returns a list containing
@@ -402,10 +880,7 @@ std::vector<double> RR(std::map<char, process*> proc_map, std::vector<process*> 
 void print_stats(std::string alg, double ave_cpu_bt, std::vector<double> data, FILE* out)
 {
 	if(alg == "FCFS")
-	{
 		fprintf(out, "Algorithm FCFS\n");
-		//data[1] += data[0]; 
-	}
 	else if(alg == "SJF")
 		fprintf(out, "Algorithm SJF\n");
 	else if(alg == "SRT")
@@ -433,6 +908,7 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 		proc->id = c;
 		proc->arr_time = floor(exp_random(lambda, upper));
 		proc->tau = (int) 1 / lambda;
+		proc->adjusted_tau = (int) 1 / lambda;
 		proc->wait_time = 0;	
 		proc->n_bursts = trunc(drand48()*100) + 1;	
 		proc->rem_bursts = proc->n_bursts;
@@ -440,14 +916,17 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 		proc->cpu_index = 0;
 	    proc->io_index = 0;	
 		proc->turnaround_time = 0;
+		proc->start_cpu_time = 0;
+		proc->end_cpu_time = 0;
 
 		proc->cpu_bursts = std::vector<int>(proc->n_bursts, 0);
 		proc->io_bursts = std::vector<int>(proc->n_bursts-1, 0);
 		proc->turnaround_times = std::vector<int>(proc->n_bursts, 0);
-
+		proc->orig_cpu_bursts = std::vector<int>(proc->n_bursts, 0);
 		for(int i = 0; i < proc->n_bursts; i++)
 		{
 			proc->cpu_bursts[i] = ceil(exp_random(lambda, upper));
+			proc->orig_cpu_bursts[i] = proc->cpu_bursts[i];
 			sum_cpu_bt += proc->cpu_bursts[i];
 			num_cpu_b++;
 			if(i != proc->n_bursts-1) proc->io_bursts[i] = ceil(exp_random(lambda, upper));
@@ -471,13 +950,13 @@ void start_sim(int n_procs, int seed, double lambda, int upper, int t_cs, double
 	}
 	else if(algorithm == "SJF")
 	{
-		data = SJF(proc_map, procs, t_cs);
+		data = SJF(proc_map, procs, t_cs,alpha);
 		print_stats("SJF", ave_cpu_bt, data, out);
 		std::cout << "\n";
 	}
 	else if(algorithm == "SRT")
 	{
-		data = SRT(proc_map, procs, t_cs);
+		data = SRT(proc_map, procs, t_cs,alpha);
 		print_stats("SRT", ave_cpu_bt, data, out);
 		std::cout << "\n";
 	}
@@ -504,7 +983,7 @@ int main(int argc, char* argv[])
 	double lambda = atof(argv[3]);
 	int upper = atoi(argv[4]);
 	unsigned int t_cs = atoi(argv[5]);
-	int alpha = atoi(argv[6]);
+	double alpha = atof(argv[6]);
 	int t_slice = atoi(argv[7]);
 	out = fopen("simout.txt", "w");
 	if(out == NULL)
